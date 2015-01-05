@@ -37,7 +37,7 @@ public class AirplaneModeEnabler implements Preference.OnPreferenceChangeListene
     private final Context mContext;
 
     private PhoneStateIntentReceiver mPhoneStateReceiver;
-    
+
     private final SwitchPreference mSwitchPref;
 
     private static final int EVENT_SERVICE_STATE_CHANGED = 3;
@@ -61,18 +61,18 @@ public class AirplaneModeEnabler implements Preference.OnPreferenceChangeListene
     };
 
     public AirplaneModeEnabler(Context context, SwitchPreference airplaneModeSwitchPreference) {
-        
+
         mContext = context;
         mSwitchPref = airplaneModeSwitchPreference;
 
         airplaneModeSwitchPreference.setPersistent(false);
-    
+
         mPhoneStateReceiver = new PhoneStateIntentReceiver(mContext, mHandler);
         mPhoneStateReceiver.notifyServiceState(EVENT_SERVICE_STATE_CHANGED);
     }
 
     public void resume() {
-        
+
         mSwitchPref.setChecked(WirelessUtils.isAirplaneModeOn(mContext));
 
         mPhoneStateReceiver.registerIntent();
@@ -81,11 +81,16 @@ public class AirplaneModeEnabler implements Preference.OnPreferenceChangeListene
                 Settings.Global.getUriFor(Settings.Global.AIRPLANE_MODE_ON), true,
                 mAirplaneModeObserver);
     }
-    
+
     public void pause() {
         mPhoneStateReceiver.unregisterIntent();
         mSwitchPref.setOnPreferenceChangeListener(null);
         mContext.getContentResolver().unregisterContentObserver(mAirplaneModeObserver);
+    }
+
+    public static boolean isAirplaneModeOn(Context context) {
+        return Settings.Global.getInt(context.getContentResolver(),
+                Settings.Global.AIRPLANE_MODE_ON, 0) != 0;
     }
 
     private void setAirplaneModeOn(boolean enabling) {
@@ -94,7 +99,7 @@ public class AirplaneModeEnabler implements Preference.OnPreferenceChangeListene
                                 enabling ? 1 : 0);
         // Update the UI to reflect system setting
         mSwitchPref.setChecked(enabling);
-        
+
         // Post the intent
         Intent intent = new Intent(Intent.ACTION_AIRPLANE_MODE_CHANGED);
         intent.putExtra("state", enabling);
@@ -112,7 +117,7 @@ public class AirplaneModeEnabler implements Preference.OnPreferenceChangeListene
     private void onAirplaneModeChanged() {
         mSwitchPref.setChecked(WirelessUtils.isAirplaneModeOn(mContext));
     }
-    
+
     /**
      * Called when someone clicks on the checkbox preference.
      */

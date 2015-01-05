@@ -419,6 +419,16 @@ public class WirelessSettings extends SettingsPreferenceFragment implements Inde
         return R.string.help_url_more_networks;
     }
 
+    public static boolean isRadioAllowed(Context context, String type) {
+        if (!AirplaneModeEnabler.isAirplaneModeOn(context)) {
+            return true;
+        }
+        // Here we use the same logic in onCreate().
+        String toggleable = Settings.Global.getString(context.getContentResolver(),
+                Settings.Global.AIRPLANE_MODE_TOGGLEABLE_RADIOS);
+        return toggleable != null && toggleable.contains(type);
+    }
+
     /**
      * For Search.
      */
