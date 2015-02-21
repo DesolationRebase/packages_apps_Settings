@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2011 Sergey Margaritov
  * Copyright (C) 2013 Slimroms
- * Copyright (C) 2015 DarkKat
+ * Copyright (C) 2015 The TeamEos Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,36 +19,41 @@
 package net.margaritov.preference.colorpicker;
 
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.preference.Preference;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup.LayoutParams;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
-import com.android.settings.R;
-
 /**
  * A preference type that allows a user to choose a time
- * 
+ *
  * @author Sergey Margaritov
  */
 public class ColorPickerPreference extends Preference implements
         Preference.OnPreferenceClickListener, ColorPickerDialog.OnColorChangedListener {
 
     View mView;
+    ColorPickerDialog mDialog;
     LinearLayout widgetFrameView;
-    int mDefaultValue = Color.BLACK;
-    int mAndroidColor = 0x00000000;
     private int mValue = Color.BLACK;
     private float mDensity = 0;
     private boolean mAlphaSliderEnabled = false;
 
-    private static final String androidns = "http://schemas.android.com/apk/res/android";
+    // if we return -6, button is not enabled
+    static final String SETTINGS_NS = "http://schemas.android.com/apk/res/com.android.settings";
+    static final int DEF_VALUE_DEFAULT = -6;
+    boolean mUsesDefaultButton = false;
+    int mDefValue = -1;
 
     private EditText mEditText;
 
@@ -68,31 +73,26 @@ public class ColorPickerPreference extends Preference implements
     }
 
     @Override
+    protected Object onGetDefaultValue(TypedArray a, int index) {
+        return a.getInt(index, Color.BLACK);
+    }
+
+    @Override
     protected void onSetInitialValue(boolean restoreValue, Object defaultValue) {
-        onColorChanged(restoreValue ? getValue() : (Integer) defaultValue);
+        onColorChanged(restoreValue ? getPersistedInt(mValue) : (Integer) defaultValue);
     }
 
     private void init(Context context, AttributeSet attrs) {
         mDensity = getContext().getResources().getDisplayMetrics().density;
         setOnPreferenceClickListener(this);
         if (attrs != null) {
-            String defaultValue = attrs.getAttributeValue(androidns, "defaultValue");
-            if (defaultValue.startsWith("#")) {
-                try {
-                    mDefaultValue = convertToColorInt(defaultValue);
-                } catch (NumberFormatException e) {
-                    Log.e("ColorPickerPreference", "Wrong color: " + defaultValue);
-                    mDefaultValue = convertToColorInt("#FF000000");
-                }
-            } else {
-                int resourceId = attrs.getAttributeResourceValue(androidns, "defaultValue", 0);
-                if (resourceId != 0) {
-                    mDefaultValue = context.getResources().getInteger(resourceId);
-                }
+            mAlphaSliderEnabled = attrs.getAttributeBooleanValue(null, "alphaSlider", false);
+            int defVal = attrs.getAttributeIntValue(SETTINGS_NS, "defaultColorValue", DEF_VALUE_DEFAULT);
+            if (defVal != DEF_VALUE_DEFAULT) {
+                mUsesDefaultButton =  true;
+                mDefValue = defVal;
             }
-            mAlphaSliderEnabled = attrs.getAttributeBooleanValue(null, "alphaSlider", true);
         }
-        mValue = mDefaultValue;
     }
 
     @Override
@@ -103,7 +103,65 @@ public class ColorPickerPreference extends Preference implements
         widgetFrameView = ((LinearLayout) view
                 .findViewById(android.R.id.widget_frame));
 
+        if (mUsesDefaultButton) {
+            setDefaultButton();
+        }
+
         setPreviewColor();
+    }
+
+    /**
+     * Restore a default value, not necessarily a color
+     * For example: Set default value to -1 to remove a color filter
+     *
+     * @author Randall Rushing aka Bigrushdog
+     */
+    private void setDefaultButton() {
+        if (mView == null)
+            return;
+
+        LinearLayout widgetFrameView = ((LinearLayout) mView
+                .findViewById(android.R.id.widget_frame));
+        if (widgetFrameView == null)
+            return;
+
+        ImageView defView = new ImageView(getContext());
+        widgetFrameView.setOrientation(LinearLayout.HORIZONTAL);
+
+        // remove already created default button
+        int count = widgetFrameView.getChildCount();
+        if (count > 0) {
+            View oldView = widgetFrameView.findViewWithTag("default");
+            View spacer = widgetFrameView.findViewWithTag("spacer");
+            if (oldView != null) {
+                widgetFrameView.removeView(oldView);
+            }
+            if (spacer != null) {
+                widgetFrameView.removeView(spacer);
+            }
+        }
+
+        widgetFrameView.addView(defView);
+        widgetFrameView.setMinimumWidth(0);
+        defView.setBackground(getContext().getDrawable(android.R.drawable.ic_menu_revert));
+        defView.setTag("default");
+        defView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    getOnPreferenceChangeListener().onPreferenceChange(ColorPickerPreference.this,
+                            Integer.valueOf(mDefValue));
+                } catch (NullPointerException e) {
+                }
+            }
+        });
+
+        // sorcery for a linear layout ugh
+        View spacer = new View(getContext());
+        spacer.setTag("spacer");
+        spacer.setLayoutParams(new LinearLayout.LayoutParams((int) (mDensity * 16),
+                LayoutParams.MATCH_PARENT));
+        widgetFrameView.addView(spacer);
     }
 
     private void setPreviewColor() {
@@ -126,17 +184,27 @@ public class ColorPickerPreference extends Preference implements
         // remove already create preview image
         int count = widgetFrameView.getChildCount();
         if (count > 0) {
-            widgetFrameView.removeViews(0, count);
+            View preview = widgetFrameView.findViewWithTag("preview");
+            if (preview != null) {
+                widgetFrameView.removeView(preview);
+            }
         }
         widgetFrameView.addView(iView);
         widgetFrameView.setMinimumWidth(0);
         iView.setBackgroundDrawable(new AlphaPatternDrawable((int) (5 * mDensity)));
         iView.setImageBitmap(getPreviewBitmap());
+        iView.setTag("preview");
+        iView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showDialog(null);
+            }
+        });
     }
 
     private Bitmap getPreviewBitmap() {
         int d = (int) (mDensity * 31); // 30dip
-        int color = getValue();
+        int color = mValue;
         Bitmap bm = Bitmap.createBitmap(d, d, Config.ARGB_8888);
         int w = bm.getWidth();
         int h = bm.getHeight();
@@ -152,18 +220,6 @@ public class ColorPickerPreference extends Preference implements
         }
 
         return bm;
-    }
-
-    public int getValue() {
-        try {
-            if (isPersistent()) {
-                mValue = getPersistedInt(mDefaultValue);
-            }
-        } catch (ClassCastException e) {
-            mValue = mDefaultValue;
-        }
-
-        return mValue;
     }
 
     @Override
@@ -184,29 +240,30 @@ public class ColorPickerPreference extends Preference implements
     }
 
     public boolean onPreferenceClick(Preference preference) {
-        ColorPickerDialog picker = new ColorPickerDialog(
-                getContext(), R.style.Theme_ColorPickerDialog, getValue(),
-                mAndroidColor);
-        picker.setOnColorChangedListener(this);
-        if (mAlphaSliderEnabled) {
-            picker.setAlphaSliderVisible(true);
-        }
-        picker.show();
-
+        //showDialog(null);
         return false;
     }
 
+    protected void showDialog(Bundle state) {
+        mDialog = new ColorPickerDialog(getContext(), mValue);
+        mDialog.setOnColorChangedListener(this);
+        if (mAlphaSliderEnabled) {
+            mDialog.setAlphaSliderVisible(true);
+        }
+        if (state != null) {
+            mDialog.onRestoreInstanceState(state);
+        }
+        mDialog.show();
+    }
+
+
     /**
      * Toggle Alpha Slider visibility (by default it's disabled)
-     * 
+     *
      * @param enable
      */
     public void setAlphaSliderEnabled(boolean enable) {
         mAlphaSliderEnabled = enable;
-    }
-
-    public void setDefaultColors(int androidColor) {
-        mAndroidColor = androidColor;
     }
 
     /**
@@ -221,7 +278,7 @@ public class ColorPickerPreference extends Preference implements
 
     /**
      * For custom purposes. Not used by ColorPickerPreferrence
-     * 
+     *
      * @param color
      * @author Unknown
      */
@@ -252,7 +309,7 @@ public class ColorPickerPreference extends Preference implements
 
     /**
      * For custom purposes. Not used by ColorPickerPreferrence
-     * 
+     *
      * @param argb
      * @throws NumberFormatException
      * @author Unknown
@@ -280,5 +337,60 @@ public class ColorPickerPreference extends Preference implements
 
         return Color.argb(alpha, red, green, blue);
     }
-}
 
+    @Override
+    protected Parcelable onSaveInstanceState() {
+        final Parcelable superState = super.onSaveInstanceState();
+        if (mDialog == null || !mDialog.isShowing()) {
+            return superState;
+        }
+
+        final SavedState myState = new SavedState(superState);
+        myState.dialogBundle = mDialog.onSaveInstanceState();
+        return myState;
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Parcelable state) {
+        if (state == null || !(state instanceof SavedState)) {
+            // Didn't save state for us in onSaveInstanceState
+            super.onRestoreInstanceState(state);
+            return;
+        }
+
+        SavedState myState = (SavedState) state;
+        super.onRestoreInstanceState(myState.getSuperState());
+        showDialog(myState.dialogBundle);
+    }
+
+    private static class SavedState extends BaseSavedState {
+        Bundle dialogBundle;
+
+        public SavedState(Parcel source) {
+            super(source);
+            dialogBundle = source.readBundle();
+        }
+
+        @Override
+        public void writeToParcel(Parcel dest, int flags) {
+            super.writeToParcel(dest, flags);
+            dest.writeBundle(dialogBundle);
+        }
+
+        public SavedState(Parcelable superState) {
+            super(superState);
+        }
+
+        @SuppressWarnings("unused")
+        public static final Parcelable.Creator<SavedState> CREATOR =
+                new Parcelable.Creator<SavedState>() {
+            public SavedState createFromParcel(Parcel in) {
+                return new SavedState(in);
+            }
+
+            public SavedState[] newArray(int size) {
+                return new SavedState[size];
+            }
+        };
+    }
+}
