@@ -30,4 +30,11 @@
     <string name="hex_hint">#ff000000</string>
     <string name="set">Set</string>
 
+    <!-- Dashboard header -->
+    <string name="header_category_personalization">Personalization</string>
+
+    <!-- BitSyko Layers -->
+    <string name="bitsyko_layers">Layers</string>
+
+
 </resources>
