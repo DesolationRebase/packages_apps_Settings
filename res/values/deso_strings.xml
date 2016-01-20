@@ -39,4 +39,7 @@
     <!-- Restart SystemUI -->
     <string name="restart_systemui">Restart SystemUI</string>
 
+    <!-- DesolatedCore Settings -->
+    <string name="desolated_title">Desolated Core</string>
+
 </resources>

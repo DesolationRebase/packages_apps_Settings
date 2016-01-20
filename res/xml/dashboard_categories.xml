@@ -94,6 +94,16 @@
             android:title="@string/header_category_personalization" >
 
         <dashboard-tile
+                android:id="@+id/desolated_settings"
+                android:icon="@drawable/ic_settings_desolation"
+                android:title="@string/desolated_title">
+                <intent
+                    android:action="android.intent.action.MAIN"
+                    android:targetPackage="com.desolationrom.settings"
+                    android:targetClass="com.desolationrom.settings.MainActivity" />
+        </dashboard-tile>
+
+        <dashboard-tile
                 android:id="@+id/bitsyko_layers"
                 android:icon="@drawable/ic_bitsyko_layers"
                 android:title="@string/bitsyko_layers">     
